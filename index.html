@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bloomery</title>
+  <meta name="description" content="A build system configured entirely in TOML. No embedded scripting language.">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="wrap">
+    <h1>Bloomery</h1>
+    <p class="tagline">A build system configured entirely in TOML. No embedded scripting language:
+      conditionals are dispatch tables, file lists are reserved-key tables, everything else is
+      <code>{name}</code> interpolation.
+    </p>
+    <p class="links">
+      <a href="https://github.com/hydrophobis/Bloomery">source</a> &middot;
+      <a href="#docs">docs</a> &middot;
+      <a href="https://github.com/bloomery-build">github.com/bloomery-build</a>
+    </p>
+  </header>
+
+  <main class="wrap">
+
+    <section>
+      <h2>Install</h2>
+      <pre><code class="language-bash">pip install bloomery-build</code></pre>
+      <p>Package name is <code>bloomery-build</code> (<code>bloomery</code> was taken); the command is
+        <code>bloomery</code>. Python 3.8+. <code>python -m bloomery</code> works uninstalled.
+      </p>
+      <pre><code class="language-bash">bloomery install     # pip install -e a git checkout (clones one if needed)
+bloomery update      # git pull that checkout, or pip upgrade if not a checkout
+bloomery uninstall
+bloomery init         # write a starter bloomery.toml</code></pre>
+    </section>
+
+    <section>
+      <h2>A manifest</h2>
+      <pre><code class="language-toml">[meta]
+name = "myproject"
+system = "c++"                             # bundled mold to load
+
+[variables]
+compiler = "g++"
+debug_flags = { on = "debug", true = "-g -O0", false = "-O2" }
+
+[tasks.build]
+command = "{compiler}"
+flags = "-std=c++17 {debug_flags}"
+files = { ending = [".cpp", ".cc", ".cxx", ".c"] }
+output = "-o {output}"
+
+[tasks.run]
+depends = ["build"]
+command = "{output}"</code></pre>
+      <pre><code class="language-bash">bloomery                    # build and run the default targets
+bloomery --clean            # ignore the cache, rebuild everything
+bloomery -D debug=false     # override a variable
+bloomery -j4                # run independent tasks in parallel
+bloomery --list             # list targets</code></pre>
+      <p>A dispatch table (the <code>{ on = ... }</code> form above) has to be the entire value of a
+        field. It can't sit inside a longer string. <code>-D</code> and <code>[profiles.X]</code>
+        both work by changing the variable a dispatch reads; there's nothing special-cased about the
+        mechanism itself.</p>
+    </section>
+
+    <section>
+      <h2>Molds</h2>
+      <p>A mold is a compiler-default template, looked up by <code>meta.system</code>: project directory,
+        then <code>meta.mold_path</code>, then <code>$BLOOMERY_MOLD_PATH</code>, then
+        <code>~/.bloomery/molds/</code>, then bundled (<code>c</code>, <code>c++</code>, <code>rust</code>,
+        <code>python</code>). Earlier entries win, so a downloaded mold shadows the bundled one.
+      </p>
+      <pre><code class="language-bash">bloomery mold get c++      # writes into ~/.bloomery/molds/, shadowing the bundled c++</code></pre>
+      <p>Reach a mold's fields with <code>{mold.field}</code>; they aren't copied into the project's own
+        variable namespace, so a mold field named <code>files</code> won't shadow a project variable of
+        the same name.</p>
+    </section>
+
+    <section>
+      <h2>Charges and alloys</h2>
+      <p>External packages, handled outside the task graph since they resolve by package name instead of
+        content hash. A <strong>charge</strong> is fetch/build instructions for one package; an
+        <strong>alloy</strong> is the package-manager routing for one language (pip, npm, cargo, or the
+        universal <code>source</code> alloy for anything with no manager).
+      </p>
+      <pre><code class="language-bash">bloomery charge install c/zlib python:requests</code></pre>
+      <p><code>c/zlib</code> resolves a real charge file (source fetch + build); <code>python:requests</code>
+        is ad-hoc: no charge file, straight through pip. Mix both in one call. Opt into running
+        this automatically before a build:</p>
+      <pre><code class="language-toml">[charges]
+auto_install = true
+use = ["c/zlib", "python:requests"]</code></pre>
+      <p>Results land in <code>.bloomery/vendor/&lt;name&gt;/</code>; a task references them like any other
+        path, e.g. <code>-I.bloomery/vendor/zlib/include</code>.</p>
+    </section>
+
+    <section>
+      <h2>Registries</h2>
+      <p>Contribution targets, one repo per kind of file:</p>
+      <ul class="doclist">
+        <li><a href="https://github.com/bloomery-build/MoldRegistry">MoldRegistry</a>: compiler defaults per language
+        </li>
+        <li><a href="https://github.com/bloomery-build/ChargeRegistry">ChargeRegistry</a>:
+          <code>&lt;language&gt;/&lt;name&gt;.toml</code> per package</li>
+        <li><a href="https://github.com/bloomery-build/AlloyRegistry">AlloyRegistry</a>: package-manager routing beyond
+          pip/npm/cargo/source</li>
+      </ul>
+    </section>
+
+    <section id="docs">
+      <h2>Docs</h2>
+      <p>Pulled from <a href="https://github.com/bloomery-build/Docs">bloomery-build/Docs</a></p>
+      <div class="doctabs" role="tablist">
+        <button role="tab" aria-selected="true" data-doc="molds.md">molds.md</button>
+        <button role="tab" aria-selected="false" data-doc="charges-and-alloys.md">charges-and-alloys.md</button>
+        <button role="tab" aria-selected="false" data-doc="tutorial.md">tutorial.md</button>
+      </div>
+      <div id="doc-view" class="doc-view" aria-live="polite">
+        <p class="doc-status">loading molds.md&hellip;</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="wrap">
+    <p>MIT. Source at <a href="https://github.com/hydrophobis/Bloomery">hydrophobis/Bloomery</a>.</p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script>
+    Prism.highlightAll();
+
+    (function () {
+      var tabs = document.querySelectorAll('#docs .doctabs button');
+      var view = document.getElementById('doc-view');
+      var base = 'https://raw.githubusercontent.com/bloomery-build/Docs/main/';
+      var cache = {};
+
+      function render(name) {
+        view.innerHTML = '<p class="doc-status">loading ' + name + '&hellip;</p>';
+        if (cache[name]) return show(name);
+        fetch(base + name)
+          .then(function (r) {
+            if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+            return r.text();
+          })
+          .then(function (md) {
+            cache[name] = md;
+            show(name);
+          })
+          .catch(function (err) {
+            view.innerHTML = '<p class="doc-status">could not load ' + name + ' (' + err.message +
+              '). <a href="https://github.com/bloomery-build/Docs/blob/main/' + name + '">view on GitHub</a></p>';
+          });
+      }
+
+      function show(name) {
+        view.innerHTML = marked.parse(cache[name]);
+        Prism.highlightAllUnder(view);
+      }
+
+      tabs.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          tabs.forEach(function (b) { b.setAttribute('aria-selected', 'false'); });
+          btn.setAttribute('aria-selected', 'true');
+          render(btn.dataset.doc);
+        });
+      });
+
+      render(tabs[0].dataset.doc);
+    })();
+  </script>
+
+</body>
+
+</html>
